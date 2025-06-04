@@ -16,10 +16,12 @@ function App() {
   const canvasRef = useRef();
   const [snake, setSnake] = useState([{ x: 10, y: 10 }]);
   const [direction, setDirection] = useState({ x: 0, y: -1 });
-  const [nextDir, setNextDir] = useState({ x: 0, y: -1 });
   const [food, setFood] = useState(getRandomFood([{ x: 10, y: 10 }]));
   const [score, setScore] = useState(0);
   const [running, setRunning] = useState(true);
+
+  // We'll use a ref to store the next direction to avoid React state lag
+  const nextDirRef = useRef({ x: 0, y: -1 });
 
   // Drawing the canvas
   useEffect(() => {
@@ -58,43 +60,40 @@ function App() {
     if (!running) return;
 
     const interval = setInterval(() => {
-      setDirection(nextDir => {
-        let newHead = {
-          x: snake[0].x + nextDir.x,
-          y: snake[0].y + nextDir.y
-        };
+      const nextDir = nextDirRef.current;
+      const newHead = {
+        x: snake[0].x + nextDir.x,
+        y: snake[0].y + nextDir.y,
+      };
 
-        // Wall or self collision
-        if (
-          newHead.x < 0 || newHead.x >= COLS ||
-          newHead.y < 0 || newHead.y >= ROWS ||
-          snake.some(seg => seg.x === newHead.x && seg.y === newHead.y)
-        ) {
-          setRunning(false);
-          return nextDir;
-        }
+      // Collision
+      if (
+        newHead.x < 0 || newHead.x >= COLS ||
+        newHead.y < 0 || newHead.y >= ROWS ||
+        snake.some(seg => seg.x === newHead.x && seg.y === newHead.y)
+      ) {
+        setRunning(false);
+        return;
+      }
 
-        // Eat food
-        let ate = newHead.x === food.x && newHead.y === food.y;
-        let newSnake = [newHead, ...snake];
-        if (!ate) newSnake.pop();
+      // Eat food
+      let ate = newHead.x === food.x && newHead.y === food.y;
+      let newSnake = [newHead, ...snake];
+      if (!ate) newSnake.pop();
 
-        setSnake(newSnake);
-        if (ate) {
-          setFood(getRandomFood(newSnake));
-          setScore(score + 1);
-        }
-
-        return nextDir;
-      });
+      setSnake(newSnake);
+      if (ate) {
+        setFood(getRandomFood(newSnake));
+        setScore(score + 1);
+      }
+      setDirection(nextDir);
     }, 100);
 
     return () => clearInterval(interval);
-    // Only run effect if running, snake, direction, food, score
     // eslint-disable-next-line
   }, [running, snake, food, score]);
 
-  // Keyboard control
+  // Keyboard control (global event listener)
   useEffect(() => {
     function handle(e) {
       if (!running && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) {
@@ -102,20 +101,21 @@ function App() {
         return;
       }
       if (!running) return;
-      if (e.key === "ArrowUp" && direction.y !== 1) setNextDir({ x: 0, y: -1 });
-      if (e.key === "ArrowDown" && direction.y !== -1) setNextDir({ x: 0, y: 1 });
-      if (e.key === "ArrowLeft" && direction.x !== 1) setNextDir({ x: -1, y: 0 });
-      if (e.key === "ArrowRight" && direction.x !== -1) setNextDir({ x: 1, y: 0 });
+
+      const dir = nextDirRef.current;
+      if (e.key === "ArrowUp" && dir.y !== 1)    nextDirRef.current = { x: 0, y: -1 };
+      if (e.key === "ArrowDown" && dir.y !== -1) nextDirRef.current = { x: 0, y: 1 };
+      if (e.key === "ArrowLeft" && dir.x !== 1)  nextDirRef.current = { x: -1, y: 0 };
+      if (e.key === "ArrowRight" && dir.x !== -1)nextDirRef.current = { x: 1, y: 0 };
     }
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-    // eslint-disable-next-line
-  }, [direction, running]);
+  }, [running]);
 
   function resetGame() {
     setSnake([{ x: 10, y: 10 }]);
     setDirection({ x: 0, y: -1 });
-    setNextDir({ x: 0, y: -1 });
+    nextDirRef.current = { x: 0, y: -1 };
     setFood(getRandomFood([{ x: 10, y: 10 }]));
     setScore(0);
     setRunning(true);
